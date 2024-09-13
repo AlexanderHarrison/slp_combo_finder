@@ -1,0 +1,20 @@
+[package]
+name = "combo_finder"
+version = "0.1.0"
+edition = "2021"
+
+description = "Fast and lightweight Melee combo finder."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/AlexanderHarrison/slp_combo_finder"
+
+[dependencies]
+json = "0.12"
+slp_parser = { path = "../tutor/slippi_situation_parser" }
+
+[lib]
+name = "slp_combo_finder"
+path = "src/lib.rs"
+
+[[bin]]
+name = "combo_finder"
+path = "src/main.rs"
