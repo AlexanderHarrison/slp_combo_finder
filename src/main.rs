@@ -28,7 +28,7 @@ fn main() {
         lead_in: 30,
         lead_out: 0,
 
-        player_character: Some(slp_parser::Character::Peach),
+        player_character: None,
         player_code: None,
         player_name: None,
         opponent_character: None,

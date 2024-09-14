@@ -1,5 +1,6 @@
 use std::path::{PathBuf, Path};
 
+#[derive(Clone, Debug)]
 pub struct Combo {
     pub path: PathBuf,
     pub start: usize,
@@ -9,34 +10,54 @@ pub struct Combo {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TargetPathError {
     PathNotFound,
-    PathInvalid,
-    ZstdInitError,
 }
 
-pub struct Config<'a> {
+#[derive(Clone, Debug)]
+pub struct Config {
     pub lead_in: usize,
     pub lead_out: usize,
 
+    /// Must be between 0 and 1
+    pub strictness: f32,
+
     pub player_character: Option<slp_parser::Character>,
-    pub player_code: Option<&'a str>,
-    pub player_name: Option<&'a str>,
+    pub player_code: Option<String>,
+    pub player_name: Option<String>,
     pub opponent_character: Option<slp_parser::Character>,
-    pub opponent_code: Option<&'a str>,
-    pub opponent_name: Option<&'a str>,
+    pub opponent_code: Option<String>,
+    pub opponent_name: Option<String>,
 }
 
-/// given a list of frames, tries to find a good place to start a combo which lasts till the end of the list.
+impl Config {
+    pub const DEFAULT: Self = Config {
+        lead_in: 30,
+        lead_out: 0,
+        strictness: 0.5,
+
+        player_character: None,
+        player_code: None,
+        player_name: None,
+        opponent_character: None,
+        opponent_code: None,
+        opponent_name: None,
+    };
+}
+
+/// Given a list of frames, tries to find a good place to start a combo which lasts till the end of the list.
+///
+/// 0 is least strict, 1 is most strict.
 fn combo_start(
     // must be same len
     atk_frame: &[slp_parser::Frame],
     def_frame: &[slp_parser::Frame],
-) -> Option<usize> {
-    const MAX_DEFENDER_CONSECUTIVE_ACTIONABLE: usize = 30;
-    const MAX_ATTACKER_TOTAL_HITSTUN: usize = 60;
 
-    const MAX_ATTACKER_CONSECUTIVE_GRAB_COUNT: usize = 4;
-    const MIN_ATTACKER_ATTACK_ACTIONS: usize = 5;
-    const MIN_DEFENDER_TOTAL_DAMAGE: f32 = 30.0;
+    strictness: f32, 
+) -> Option<usize> {
+    let max_defender_consecutive_actionable = (35.0 - 10.0 * strictness).round() as usize;
+    let max_attacker_total_hitstun          = (65.0 - 10.0 * strictness).round() as usize;
+    let max_attacker_consecutive_grab_count = ( 6.0 -  4.0 * strictness).round() as usize;
+    let min_attacker_attack_actions         = ( 3.0 +  6.0 * strictness).round() as usize;
+    let min_defender_total_damage           = (20.0 + 40.0 * strictness).round();
 
     use slp_parser::{ActionState, StandardActionState, BroadState, StandardBroadState};
 
@@ -56,8 +77,8 @@ fn combo_start(
     }
     let last_hit_end = last_hit_end?;
 
-    let mut defender_consecutive_actionable = MAX_DEFENDER_CONSECUTIVE_ACTIONABLE;
-    let mut attacker_total_hitstun = MAX_ATTACKER_TOTAL_HITSTUN;
+    let mut defender_consecutive_actionable = max_defender_consecutive_actionable;
+    let mut attacker_total_hitstun = max_attacker_total_hitstun;
     let mut first_hit = None;
 
     for f in (0..last_hit_end).rev() {
@@ -78,7 +99,7 @@ fn combo_start(
         ) {
             defender_consecutive_actionable -= 1;
         } else {
-            defender_consecutive_actionable = MAX_DEFENDER_CONSECUTIVE_ACTIONABLE;
+            defender_consecutive_actionable = max_defender_consecutive_actionable;
         }
 
         match attacker_state {
@@ -96,10 +117,10 @@ fn combo_start(
     if let Some(first) = first_hit {
         // defender
         let damage_dealt = def_frame.last().unwrap().percent - def_frame[first-1].percent;
-        if damage_dealt < MIN_DEFENDER_TOTAL_DAMAGE { return None; }
+        if damage_dealt < min_defender_total_damage { return None; }
 
         // attacker
-        let mut attacker_consecutive_grabs = MAX_ATTACKER_CONSECUTIVE_GRAB_COUNT;
+        let mut attacker_consecutive_grabs = max_attacker_consecutive_grab_count;
         let mut attacker_attacks = 0;
         for f in atk_frame[first..last_hit_end].iter() {
             // advance grab counter
@@ -115,7 +136,7 @@ fn combo_start(
                 f.state.broad_state(), 
                 BroadState::Standard(StandardBroadState::Attack) | BroadState::Special(_) 
             ) {
-                attacker_consecutive_grabs = MAX_ATTACKER_CONSECUTIVE_GRAB_COUNT;
+                attacker_consecutive_grabs = max_attacker_consecutive_grab_count;
 
                 if f.anim_frame == 1.0 {
                     attacker_attacks += 1;
@@ -125,7 +146,7 @@ fn combo_start(
             if attacker_consecutive_grabs == 0 { return None; }
         }
 
-        if attacker_attacks < MIN_ATTACKER_ATTACK_ACTIONS { return None; }
+        if attacker_attacks < min_attacker_attack_actions { return None; }
     }
 
     first_hit
@@ -156,12 +177,14 @@ fn combos(
             }
 
             loop {
-                if Some(atk_frame[f].character) != config.player_character { break; }
-                if Some(def_frame[f].character) != config.opponent_character { break; }
+                // second character check to make sure it's not transformed sheik/zelda
+                if config.player_character.is_some_and(|c| c != atk_frame[f].character) { break; }
+                if config.opponent_character.is_some_and(|c| c != def_frame[f].character) { break; }
 
                 if let Some(kill_combo_start) = combo_start(
                     &atk_frame[..f],
                     &def_frame[..f],
+                    config.strictness,
                 ) {
                     let start = kill_combo_start.saturating_sub(config.lead_in);
                     combos.lock().unwrap().push(Combo {
@@ -189,12 +212,12 @@ fn combos(
         o_code: [u8; 10],
         o_name: [u8; 32],
     ) -> bool {
-        if config.player_character.is_some_and(|c| c != p_char) { return false }
+        if config.player_character  .is_some_and(|c| c != p_char) { return false }
         if config.opponent_character.is_some_and(|c| c != o_char) { return false }
-        if config.player_name.is_some_and(|c| c.as_bytes() != &p_name[..c.len()]) { return false }
-        if config.opponent_name.is_some_and(|c| c.as_bytes() != &o_name[..c.len()]) { return false }
-        if config.player_code.is_some_and(|c| c.as_bytes() != &p_code[..c.len()]) { return false }
-        if config.opponent_code.is_some_and(|c| c.as_bytes() != &o_code[..c.len()]) { return false }
+        if config.player_name       .as_ref().is_some_and(|c| c.as_bytes() != &p_name[..c.len()]) { return false }
+        if config.opponent_name     .as_ref().is_some_and(|c| c.as_bytes() != &o_name[..c.len()]) { return false }
+        if config.player_code       .as_ref().is_some_and(|c| c.as_bytes() != &p_code[..c.len()]) { return false }
+        if config.opponent_code     .as_ref().is_some_and(|c| c.as_bytes() != &o_code[..c.len()]) { return false }
 
         true
     }
@@ -325,4 +348,38 @@ pub fn write_playlist(combos: &[Combo], out_json_path: &std::path::Path) -> std:
     };
 
     std::fs::write(out_json_path, json::stringify_pretty(out_json, 2))
+}
+
+#[derive(Debug)]
+pub enum ParsePlaylistError {
+    JsonParseError(json::Error),
+    NotAPlaylistJsonFile,
+}
+
+impl std::fmt::Display for ParsePlaylistError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsePlaylistError::JsonParseError(e) => write!(f, "Invalid json: {}", e),
+            ParsePlaylistError::NotAPlaylistJsonFile => write!(f, "File is not a playlist."),
+        }
+    }
+}
+
+pub fn parse_playlist_json(file: &str) -> Result<Vec<Combo>, ParsePlaylistError> {
+    let mut parsed = json::parse(file).map_err(|e| ParsePlaylistError::JsonParseError(e))?;
+
+    if parsed["mode"] != "queue" { return Err(ParsePlaylistError::NotAPlaylistJsonFile); }
+    if !parsed["queue"].is_array() { return Err(ParsePlaylistError::NotAPlaylistJsonFile); }
+
+    let games = parsed["queue"]
+        .members_mut()
+        .filter_map(|v| {
+            let path = v["path"].take_string()?.into();
+            let start = (v["startFrame"].as_i64()? + 123) as usize;
+            let end = (v["endFrame"].as_i64()? + 123) as usize;
+
+            Some(Combo { path, start, end })
+        }).collect::<Vec<_>>();
+
+    Ok(games)
 }
