@@ -1,6 +1,6 @@
 use std::path::{PathBuf, Path};
 
-const USAGE: &'static str = "Usage: combo_finder <slp or folder path> [out path]";
+const USAGE: &'static str = "Usage: combo_finder <slp or folder path> <strictness> [out path]";
 
 fn main() {
     let mut args = std::env::args();
@@ -19,6 +19,20 @@ fn main() {
         std::process::exit(1);
     }
 
+    let strictness = match args.next() {
+        Some(n) => match n.parse::<f32>() {
+            Ok(n) if (0.0..=1.0).contains(&n) => n,
+            _ => {
+                eprintln!("Error: invalid strictness '{}'", n);
+                std::process::exit(1);
+            }
+        }
+        None => {
+            eprintln!("{}", USAGE);
+            std::process::exit(1);
+        }
+    };
+
     let out_json_path = match args.next() {
         Some(p) => p,
         None => "combos.json".to_string(),
@@ -27,6 +41,7 @@ fn main() {
     let config = slp_combo_finder::Config {
         lead_in: 30,
         lead_out: 0,
+        strictness,
 
         player_character: None,
         player_code: None,
