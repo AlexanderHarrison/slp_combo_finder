@@ -206,18 +206,18 @@ fn combos(
     fn passes(
         config: &Config,
         p_char: slp_parser::Character,
-        p_code: [u8; 10],
-        p_name: [u8; 32],
+        p_code: &str,
+        p_name: &str,
         o_char: slp_parser::Character,
-        o_code: [u8; 10],
-        o_name: [u8; 32],
+        o_code: &str,
+        o_name: &str,
     ) -> bool {
         if config.player_character  .is_some_and(|c| c != p_char) { return false }
         if config.opponent_character.is_some_and(|c| c != o_char) { return false }
-        if config.player_name       .as_ref().is_some_and(|c| c.as_bytes() != &p_name[..c.len()]) { return false }
-        if config.opponent_name     .as_ref().is_some_and(|c| c.as_bytes() != &o_name[..c.len()]) { return false }
-        if config.player_code       .as_ref().is_some_and(|c| c.as_bytes() != &p_code[..c.len()]) { return false }
-        if config.opponent_code     .as_ref().is_some_and(|c| c.as_bytes() != &o_code[..c.len()]) { return false }
+        if config.player_name       .as_ref().is_some_and(|c| !p_name.contains(c)) { return false }
+        if config.opponent_name     .as_ref().is_some_and(|c| !o_name.contains(c)) { return false }
+        if config.player_code       .as_ref().is_some_and(|c| !p_code.contains(c)) { return false }
+        if config.opponent_code     .as_ref().is_some_and(|c| !o_code.contains(c)) { return false }
 
         true
     }
@@ -227,12 +227,24 @@ fn combos(
         Err(_) => return 0,
     };
 
+    let mut buf = String::with_capacity(128);
+
     let p1_char = info.low_starting_character.character();
     let p2_char = info.high_starting_character.character();
-    let p1_name = info.low_name;
-    let p2_name = info.high_name;
-    let p1_code = info.low_connect_code;
-    let p2_code = info.high_connect_code;
+
+    slp_parser::decode_shift_jis(&info.low_name, &mut buf).unwrap();
+    let p1_name_end = buf.len();
+    slp_parser::decode_shift_jis(&info.high_name, &mut buf).unwrap();
+    let p2_name_end = buf.len();
+    slp_parser::decode_shift_jis(&info.low_connect_code, &mut buf).unwrap();
+    let p1_code_end = buf.len();
+    slp_parser::decode_shift_jis(&info.high_connect_code, &mut buf).unwrap();
+    let p2_code_end = buf.len();
+    
+    let p1_name = &buf[0..p1_name_end];
+    let p2_name = &buf[p1_name_end..p2_name_end];
+    let p1_code = &buf[p2_name_end..p1_code_end];
+    let p2_code = &buf[p1_code_end..p2_code_end];
 
     let p1_passes = passes(config, p1_char, p1_code, p1_name, p2_char, p2_code, p2_name);
     let p2_passes = passes(config, p2_char, p2_code, p2_name, p1_char, p1_code, p1_name);
