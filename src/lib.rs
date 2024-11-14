@@ -227,6 +227,11 @@ fn combos(
         Err(_) => return 0,
     };
 
+    let (low_port, high_port) = match game.info.low_high_ports() {
+        Some(p) => p,
+        None => return 0,
+    };
+
     let mut buf = String::with_capacity(128);
 
     let p1_char = info.low_starting_character.character();
