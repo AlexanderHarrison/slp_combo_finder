@@ -227,23 +227,23 @@ fn combos(
         Err(_) => return 0,
     };
 
-    let (low_port, high_port) = match game.info.low_high_ports() {
+    let (low_port, high_port) = match info.low_high_ports() {
         Some(p) => p,
         None => return 0,
     };
 
     let mut buf = String::with_capacity(128);
 
-    let p1_char = info.low_starting_character.character();
-    let p2_char = info.high_starting_character.character();
+    let p1_char = info.starting_character_colours[low_port].unwrap().character();
+    let p2_char = info.starting_character_colours[high_port].unwrap().character();
 
-    slp_parser::decode_shift_jis(&info.low_name, &mut buf).unwrap();
+    slp_parser::decode_shift_jis(&info.names[low_port], &mut buf).unwrap();
     let p1_name_end = buf.len();
-    slp_parser::decode_shift_jis(&info.high_name, &mut buf).unwrap();
+    slp_parser::decode_shift_jis(&info.names[high_port], &mut buf).unwrap();
     let p2_name_end = buf.len();
-    slp_parser::decode_shift_jis(&info.low_connect_code, &mut buf).unwrap();
+    slp_parser::decode_shift_jis(&info.connect_codes[low_port], &mut buf).unwrap();
     let p1_code_end = buf.len();
-    slp_parser::decode_shift_jis(&info.high_connect_code, &mut buf).unwrap();
+    slp_parser::decode_shift_jis(&info.connect_codes[high_port], &mut buf).unwrap();
     let p2_code_end = buf.len();
     
     let p1_name = &buf[0..p1_name_end];
@@ -262,12 +262,15 @@ fn combos(
             Err(_) => return 0,
         };
 
+        let f1 = game.frames[low_port].as_ref().unwrap();
+        let f2 = game.frames[high_port].as_ref().unwrap();
+
         if p1_passes {
-            inner(&game.low_port_frames, &game.high_port_frames, config, path, combos, &mut found)
+            inner(f1, f2, config, path, combos, &mut found)
         }
 
         if p2_passes {
-            inner(&game.high_port_frames, &game.low_port_frames, config, path, combos, &mut found)
+            inner(f2, f1, config, path, combos, &mut found)
         }
     }
 
