@@ -122,6 +122,7 @@ fn combo_start(
         // attacker
         let mut attacker_consecutive_grabs = max_attacker_consecutive_grab_count;
         let mut attacker_attacks = 0;
+        dbg!(first, last_hit_end);
         for f in atk_frame[first..last_hit_end].iter() {
             // advance grab counter
             if (
@@ -246,6 +247,7 @@ fn combos(
     slp_parser::decode_shift_jis(&info.connect_codes[high_port], &mut buf).unwrap();
     let p2_code_end = buf.len();
     
+    dbg!(p1_name_end, p2_name_end, p1_code_end, p2_code_end);
     let p1_name = &buf[0..p1_name_end];
     let p2_name = &buf[p1_name_end..p2_name_end];
     let p1_code = &buf[p2_name_end..p1_code_end];
