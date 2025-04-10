@@ -122,7 +122,6 @@ fn combo_start(
         // attacker
         let mut attacker_consecutive_grabs = max_attacker_consecutive_grab_count;
         let mut attacker_attacks = 0;
-        dbg!(first, last_hit_end);
         for f in atk_frame[first..last_hit_end].iter() {
             // advance grab counter
             if (
