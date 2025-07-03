@@ -257,7 +257,7 @@ fn combos(
     let mut found = 0;
 
     if p1_passes | p2_passes {
-        let (game, _) = match slp_parser::read_game(path) {
+        let game = match slp_parser::read_game(path) {
             Ok(g) => g,
             Err(_) => return 0,
         };
